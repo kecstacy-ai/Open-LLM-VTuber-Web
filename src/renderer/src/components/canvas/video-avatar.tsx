@@ -106,18 +106,20 @@ export const VideoAvatar = memo((): JSX.Element => {
   const tokenRef = useRef(0);
   const [opacity, setOpacity] = useState<[number, number]>([1, 0]);
 
-  const playClip = useCallback((clip: string | undefined) => {
+  const playClip = useCallback((clip: string | undefined, withAudio = false) => {
     if (!clip) return;
     const token = ++tokenRef.current;
     const cur = videoRefs[activeRef.current].current;
     // Same clip requested: restart in place, no crossfade needed
     if (clip === currentClipRef.current && cur && cur.src) {
+      cur.muted = !withAudio;
       if (cur.ended || cur.paused) { cur.currentTime = 0; cur.play().catch(() => {}); }
       return;
     }
     const nextIdx = 1 - activeRef.current;
     const next = videoRefs[nextIdx].current;
     if (!next) return;
+    next.muted = !withAudio;
     next.src = resolve(clip);
     next.currentTime = 0;
     next.play().then(() => {
@@ -133,17 +135,61 @@ export const VideoAvatar = memo((): JSX.Element => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolve, crossfadeMs]);
 
-  // Switch clip set whenever the state (or emotion while talking) changes
+  // ---------- one-shot actions: dance / sing / pole ----------
+  // Requested via an emotionMap tag in her reply ([dance]) -> plays when she finishes talking.
+  // Or automatically after `idleActionAfterSec` of idle.
+  const [action, setAction] = useState<string | null>(null);
+  const actionRef = useRef<string | null>(null);
+  actionRef.current = action;
+  const pendingActionRef = useRef<string | null>(null);
+  const actions = clips?.actions ?? {};
+  const actionAudio = clips?.actionAudio !== false;
+
+  // Remember a requested action while she is still talking
+  useEffect(() => {
+    const e = speech.expression !== null ? String(speech.expression) : null;
+    if (speech.speaking && e && actions[e]?.length) pendingActionRef.current = e;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speech.speaking, speech.expression, clips]);
+
+  // Start the pending action once talking stops; cancel actions when the user speaks
+  useEffect(() => {
+    if (clipState === 'listening') { pendingActionRef.current = null; setAction(null); return; }
+    if (clipState === 'idle' && pendingActionRef.current) {
+      setAction(pendingActionRef.current);
+      pendingActionRef.current = null;
+    }
+  }, [clipState]);
+
+  // Idle timer -> random action
+  useEffect(() => {
+    const after = clips?.idleActionAfterSec ?? 0;
+    if (!after || clipState !== 'idle' || action) return undefined;
+    const pool = (clips?.idleActions ?? Object.keys(actions)).filter((a) => actions[a]?.length);
+    if (!pool.length) return undefined;
+    const t = setTimeout(() => setAction(pool[Math.floor(Math.random() * pool.length)]), after * 1000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipState, action, clips]);
+
+  // Switch clip set whenever the state, emotion or action changes
   useEffect(() => {
     if (!clips) return;
+    if (action && clipState !== 'talking' && actions[action]?.length) {
+      listRef.current = actions[action];
+      playClip(pick(actions[action]), actionAudio);
+      return;
+    }
     const list = clipsFor(clipState, clips, speech.expression);
     listRef.current = list;
     if (!list.includes(currentClipRef.current ?? '')) playClip(pick(list));
-  }, [clipState, speech.expression, clips, playClip]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipState, speech.expression, clips, playClip, action]);
 
-  // When the active clip ends, continue with another clip from the current set
+  // When the active clip ends: an action finishes (back to normal), otherwise keep looping the set
   const onEnded = useCallback((idx: number) => {
     if (idx !== activeRef.current) return;
+    if (actionRef.current) { setAction(null); return; }
     playClip(pick(listRef.current, currentClipRef.current) ?? currentClipRef.current);
   }, [playClip]);
 
@@ -153,6 +199,7 @@ export const VideoAvatar = memo((): JSX.Element => {
     const all = new Set<string>([
       ...clips.idle, ...(clips.talking ?? []), ...(clips.listening ?? []), ...(clips.thinking ?? []),
       ...Object.values(clips.talkingByEmotion ?? {}).flat(),
+      ...Object.values(clips.actions ?? {}).flat(),
     ]);
     const els = [...all].map((c) => {
       const v = document.createElement('video');
@@ -259,7 +306,7 @@ export const VideoAvatar = memo((): JSX.Element => {
     saveLayout(next);
   };
   const onContextMenu = (e: React.MouseEvent) => {
-    if (!isPet) return;
+    if (!window.api?.showContextMenu) return;
     e.preventDefault();
     window.api?.showContextMenu?.();
   };

@@ -81,8 +81,9 @@ export const Live2D = memo(
       handlers.onMouseDown(e);
     };
 
+    // Right-click menu in both modes (Window/Pet switch, Fullscreen, mic...)
     const handleContextMenu = (e: React.MouseEvent) => {
-      if (!isPet) {
+      if (!window.api?.showContextMenu) {
         return;
       }
 

@@ -39,6 +39,17 @@ export interface VideoClipSet {
   thinking?: string[];
   /** Talking clips per emotion value from emotionMap, e.g. { joy: ["talk_happy.webm"] } */
   talkingByEmotion?: { [emotion: string]: string[] };
+  /**
+   * One-shot action clips, e.g. { dance: [...], sing: [...], pole: [...] }.
+   * Played when the LLM emits the matching emotionMap tag ([dance]) or randomly when idle.
+   */
+  actions?: { [action: string]: string[] };
+  /** Seconds of idle before a random action plays (0/undefined = off). */
+  idleActionAfterSec?: number;
+  /** Which actions may play when idle (default: all). */
+  idleActions?: string[];
+  /** Play action clips with their own audio (music/humming). Default true. */
+  actionAudio?: boolean;
 }
 
 /**
