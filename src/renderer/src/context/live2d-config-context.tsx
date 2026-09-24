@@ -29,10 +29,32 @@ export interface TapMotionMap {
 }
 
 /**
+ * Clip lists for the video avatar. Paths are relative to ModelInfo.url.
+ * Every state falls back to `idle` when it has no clips of its own.
+ */
+export interface VideoClipSet {
+  idle: string[];
+  talking?: string[];
+  listening?: string[];
+  thinking?: string[];
+  /** Talking clips per emotion value from emotionMap, e.g. { joy: ["talk_happy.webm"] } */
+  talkingByEmotion?: { [emotion: string]: string[] };
+}
+
+/**
  * Live2D model information interface
  * @interface ModelInfo
  */
 export interface ModelInfo {
+  /** Avatar renderer. Defaults to "live2d". */
+  type?: 'live2d' | 'video';
+
+  /** Clips for type "video" */
+  videoClips?: VideoClipSet;
+
+  /** Crossfade duration between clips in ms (type "video"). Default 250. */
+  videoCrossfadeMs?: number;
+
   /** Model name */
   name?: string;
 

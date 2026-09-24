@@ -10,6 +10,7 @@ import { updateModelConfig } from '../../../WebSDK/src/lappdefine';
 import { LAppDelegate } from '../../../WebSDK/src/lappdelegate';
 import { initializeLive2D } from '@cubismsdksamples/main';
 import { useMode } from '@/context/mode-context';
+import { usePetFullscreen, movePetWindowBy } from '@/hooks/utils/use-pet-fullscreen';
 
 interface UseLive2DModelProps {
   modelInfo: ModelInfo | undefined;
@@ -102,6 +103,8 @@ export const useLive2DModel = ({
   const prevModelUrlRef = useRef<string | null>(null);
   const isHoveringModelRef = useRef(false);
   const electronApi = (window as any).electron;
+  const petFullscreen = usePetFullscreen();
+  const lastScreenPosRef = useRef<Position>({ x: 0, y: 0 }); // for moving the compact pet window
 
   // --- State for Tap vs Drag ---
   const mouseDownTimeRef = useRef<number>(0);
@@ -257,6 +260,7 @@ export const useLive2DModel = ({
       if (distanceMoved > DRAG_DISTANCE_THRESHOLD_PX || (timeElapsed > TAP_DURATION_THRESHOLD_MS && distanceMoved > 1)) {
         isPotentialTapRef.current = false; // It's a drag, not a tap
         setIsDragging(true);
+        lastScreenPosRef.current = { x: e.screenX, y: e.screenY };
 
         // Set initial drag screen position using the position from mousedown
         const canvas = canvasRef.current;
@@ -270,8 +274,12 @@ export const useLive2DModel = ({
     }
     // --- End Start Drag Logic ---
 
+    // --- Compact pet window: dragging moves the window, not the model ---
+    if (isDragging && isPet && !petFullscreen) {
+      movePetWindowBy(e.screenX - lastScreenPosRef.current.x, e.screenY - lastScreenPosRef.current.y);
+      lastScreenPosRef.current = { x: e.screenX, y: e.screenY };
     // --- Continue Drag Logic ---
-    if (isDragging && adapter && view && model && canvasRef.current) {
+    } else if (isDragging && adapter && view && model && canvasRef.current) {
       const canvas = canvasRef.current;
       const rect = canvas.getBoundingClientRect();
       const currentX = e.clientX - rect.left; // Current screen X relative to canvas
@@ -331,7 +339,7 @@ export const useLive2DModel = ({
       }
     }
     // --- End Pet Hover Logic ---
-  }, [isPet, isDragging, electronApi, canvasRef]);
+  }, [isPet, isDragging, electronApi, canvasRef, petFullscreen]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     const adapter = (window as any).getLAppAdapter?.();

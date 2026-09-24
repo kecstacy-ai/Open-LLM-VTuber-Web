@@ -7,7 +7,7 @@ export const inputSubtitleStyles = {
     justifyContent: 'center',
     maxW: 'fit-content',
     position: 'absolute' as const,
-    bottom: '120px',
+    bottom: '8px',
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: 1000,
@@ -17,7 +17,7 @@ export const inputSubtitleStyles = {
   },
 
   box: {
-    w: '400px',
+    w: 'min(340px, 94vw)',
     rounded: 'xl',
     overflow: 'hidden',
     boxShadow: 'lg',

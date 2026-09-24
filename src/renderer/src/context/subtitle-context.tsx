@@ -1,6 +1,7 @@
 import {
   createContext, useState, useMemo, useContext, memo,
 } from 'react';
+import { useLocalStorage } from '@/hooks/utils/use-local-storage';
 
 /**
  * Subtitle context state interface
@@ -24,8 +25,7 @@ interface SubtitleState {
  * Default values and constants
  */
 const DEFAULT_SUBTITLE = {
-  text: "Hi, I'm some random AI VTuber. Who the hell are ya? "
-        + 'Ahh, you must be amazed by my awesomeness, right? right?',
+  text: '',
 };
 
 /**
@@ -43,7 +43,8 @@ export const SubtitleContext = createContext<SubtitleState | null>(null);
 export const SubtitleProvider = memo(({ children }: { children: React.ReactNode }) => {
   // State management
   const [subtitleText, setSubtitleText] = useState<string>(DEFAULT_SUBTITLE.text);
-  const [showSubtitle, setShowSubtitle] = useState<boolean>(true);
+  // Captions are off by default; the choice is remembered (Settings → General → Show Subtitle)
+  const [showSubtitle, setShowSubtitle] = useLocalStorage<boolean>('showSubtitle', false);
 
   // Memoized context value
   const contextValue = useMemo(

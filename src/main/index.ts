@@ -77,7 +77,13 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId("com.electron");
 
   windowManager = new WindowManager();
-  menuManager = new MenuManager((mode) => windowManager.setWindowMode(mode));
+  menuManager = new MenuManager(
+    (mode) => windowManager.setWindowMode(mode),
+    {
+      get: () => windowManager.isPetFullscreen(),
+      set: (v) => windowManager.setPetFullscreen(v),
+    },
+  );
 
   const window = windowManager.createWindow({
     titleBarOverlay: {

@@ -17,8 +17,25 @@ export class MenuManager {
 
   private configFiles: ConfigFile[] = [];
 
-  constructor(private onModeChange: (mode: 'window' | 'pet') => void) {
+  constructor(
+    private onModeChange: (mode: 'window' | 'pet') => void,
+    private petFullscreen?: { get: () => boolean; set: (v: boolean) => void },
+  ) {
     this.setupContextMenu();
+  }
+
+  /** Pet-mode "Fullscreen" checkbox: checked = span all displays, unchecked = compact window */
+  private getPetFullscreenItems(): MenuItemConstructorOptions[] {
+    if (this.currentMode !== 'pet' || !this.petFullscreen) return [];
+    return [{
+      label: 'Fullscreen',
+      type: 'checkbox' as const,
+      checked: this.petFullscreen.get(),
+      click: (item) => {
+        this.petFullscreen?.set(item.checked);
+        this.updateTrayMenu();
+      },
+    }];
   }
 
   createTray(): void {
@@ -64,6 +81,7 @@ export class MenuManager {
       // Only show toggle mouse ignore in pet mode
       ...(this.currentMode === 'pet'
         ? [
+          ...this.getPetFullscreenItems(),
           {
             label: 'Toggle Mouse Passthrough',
             click: () => {
@@ -151,6 +169,7 @@ export class MenuManager {
         : []),
       { type: 'separator' as const },
       ...this.getModeMenuItems(),
+      ...this.getPetFullscreenItems(),
       { type: 'separator' as const },
       {
         label: 'Switch Character',

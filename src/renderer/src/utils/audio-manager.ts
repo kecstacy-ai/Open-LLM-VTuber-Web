@@ -2,9 +2,38 @@
  * Global audio manager for handling audio playback and interruption
  * This ensures all components share the same audio reference
  */
+export interface SpeakingState {
+  speaking: boolean;
+  /** First expression/emotion value of the current sentence, if any */
+  expression: string | number | null;
+}
+
+type SpeakingListener = (state: SpeakingState) => void;
+
 class AudioManager {
   private currentAudio: HTMLAudioElement | null = null;
   private currentModel: any | null = null;
+  private speakingState: SpeakingState = { speaking: false, expression: null };
+  private listeners = new Set<SpeakingListener>();
+
+  /**
+   * Subscribe to speaking start/stop (used by non-Live2D avatars). Returns unsubscribe.
+   */
+  subscribeSpeaking(listener: SpeakingListener): () => void {
+    this.listeners.add(listener);
+    listener(this.speakingState);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  getSpeakingState(): SpeakingState {
+    return this.speakingState;
+  }
+
+  setSpeaking(speaking: boolean, expression: string | number | null = null) {
+    if (this.speakingState.speaking === speaking && this.speakingState.expression === expression) return;
+    this.speakingState = { speaking, expression };
+    this.listeners.forEach((l) => l(this.speakingState));
+  }
 
   /**
    * Set the current playing audio
@@ -18,10 +47,11 @@ class AudioManager {
    * Stop current audio playback and lip sync
    */
   stopCurrentAudioAndLipSync() {
+    this.setSpeaking(false);
     if (this.currentAudio) {
       console.log('[AudioManager] Stopping current audio and lip sync');
       const audio = this.currentAudio;
-      
+
       // Stop audio playback
       audio.pause();
       audio.src = '';
@@ -64,6 +94,7 @@ class AudioManager {
     if (this.currentAudio === audio) {
       this.currentAudio = null;
       this.currentModel = null;
+      this.setSpeaking(false);
     }
   }
 

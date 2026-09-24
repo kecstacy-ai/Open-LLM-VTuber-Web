@@ -6,7 +6,9 @@ import { useState, useEffect, useRef } from "react";
 import Sidebar from "./components/sidebar/sidebar";
 import Footer from "./components/footer/footer";
 import { AiStateProvider } from "./context/ai-state-context";
-import { Live2DConfigProvider } from "./context/live2d-config-context";
+import { Live2DConfigProvider, useLive2DConfig } from "./context/live2d-config-context";
+import { VideoAvatar } from "./components/canvas/video-avatar";
+import { PetResizeGrip } from "./components/electron/pet-resize-grip";
 import { SubtitleProvider } from "./context/subtitle-context";
 import { BgUrlProvider } from "./context/bgurl-context";
 import { layoutStyles } from "./layout";
@@ -29,6 +31,12 @@ import Background from "./components/canvas/background";
 import WebSocketStatus from "./components/canvas/ws-status";
 import Subtitle from "./components/canvas/subtitle";
 import { ModeProvider, useMode } from "./context/mode-context";
+
+// Picks the avatar renderer from the model_dict entry ("type": "video" or Live2D by default)
+function AvatarCanvas(): JSX.Element {
+  const { modelInfo } = useLive2DConfig();
+  return modelInfo?.type === "video" ? <VideoAvatar /> : <Live2D />;
+}
 
 function AppContent(): JSX.Element {
   const [showSidebar, setShowSidebar] = useState(true);
@@ -73,11 +81,11 @@ function AppContent(): JSX.Element {
     zIndex: 5, // Ensure it's layered correctly below UI but above background
     left: {
       base: "0px", // Column layout (base): Start from left edge
-      md: sidebarVisible ? "440px" : "24px", // Row layout (md+): Offset by sidebar width
+      md: sidebarVisible ? "320px" : "24px", // Row layout (md+): Offset by sidebar width
     },
     width: {
       base: "100%", // Column layout (base): Full width
-      md: `calc(100% - ${sidebarVisible ? "440px" : "24px"})`, // Row layout (md+): Adjust width based on sidebar
+      md: `calc(100% - ${sidebarVisible ? "320px" : "24px"})`, // Row layout (md+): Adjust width based on sidebar
     },
   });
 
@@ -101,7 +109,7 @@ function AppContent(): JSX.Element {
           ? getResponsiveLive2DWindowStyle(showSidebar)
           : live2dPetStyle)}
       >
-        <Live2D />
+        <AvatarCanvas />
       </Box>
 
       {/* Conditional Rendering of Window UI */}
@@ -151,6 +159,7 @@ function AppContent(): JSX.Element {
 
       {/* Conditional Rendering of Pet Mode UI */}
       {mode === "pet" && <InputSubtitle />}
+      {mode === "pet" && <PetResizeGrip />}
     </>
   );
 }

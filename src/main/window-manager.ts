@@ -1,10 +1,35 @@
 import {
-  BrowserWindow, screen, shell, ipcMain,
+  BrowserWindow, screen, shell, ipcMain, app,
 } from 'electron';
 import { join } from 'path';
+import { readFileSync, writeFileSync } from 'fs';
 import { is } from '@electron-toolkit/utils';
 
 const isMac = process.platform === 'darwin';
+
+type Bounds = { x: number; y: number; width: number; height: number };
+
+interface PetSettings {
+  /** true: pet window spans every display. false: compact floating window. */
+  petFullscreen: boolean;
+  compactBounds?: Bounds;
+}
+
+const PET_SETTINGS_FILE = () => join(app.getPath('userData'), 'pet-settings.json');
+const COMPACT_DEFAULT = { width: 420, height: 640 };
+const COMPACT_MIN_HEIGHT = 240;
+
+function loadPetSettings(): PetSettings {
+  try {
+    return { petFullscreen: false, ...JSON.parse(readFileSync(PET_SETTINGS_FILE(), 'utf-8')) };
+  } catch {
+    return { petFullscreen: false };
+  }
+}
+
+function savePetSettings(s: PetSettings): void {
+  try { writeFileSync(PET_SETTINGS_FILE(), JSON.stringify(s, null, 2)); } catch (e) { console.error('pet-settings save failed', e); }
+}
 
 export class WindowManager {
   private window: BrowserWindow | null = null;
@@ -23,7 +48,46 @@ export class WindowManager {
   // Track if mouse events are forcibly ignored
   private forceIgnoreMouse = false;
 
+  private petSettings: PetSettings = loadPetSettings();
+
+  private saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
+    ipcMain.handle('get-pet-fullscreen', () => this.petSettings.petFullscreen);
+
+    // Compact pet window: renderer drags / wheel-resizes the window itself
+    ipcMain.on('pet-window-move-by', (_event, dx: number, dy: number) => {
+      if (!this.window || this.currentMode !== 'pet' || this.petSettings.petFullscreen) return;
+      const b = this.window.getBounds();
+      this.window.setBounds({ ...b, x: Math.round(b.x + dx), y: Math.round(b.y + dy) });
+      this.rememberCompactBounds();
+    });
+
+    // Corner grip: resize the compact pet window by a pixel delta (top-left stays put)
+    ipcMain.on('pet-window-resize-drag', (_event, dw: number, dh: number) => {
+      if (!this.window || this.currentMode !== 'pet' || this.petSettings.petFullscreen) return;
+      const b = this.window.getBounds();
+      const wa = screen.getDisplayMatching(b).workArea;
+      const width = Math.round(Math.min(wa.width, Math.max(200, b.width + dw)));
+      const height = Math.round(Math.min(wa.height, Math.max(COMPACT_MIN_HEIGHT, b.height + dh)));
+      this.window.setBounds({
+        x: b.x, y: b.y, width, height,
+      });
+      this.rememberCompactBounds();
+    });
+
+    ipcMain.on('pet-window-resize-by', (_event, factor: number) => {
+      if (!this.window || this.currentMode !== 'pet' || this.petSettings.petFullscreen) return;
+      const b = this.window.getBounds();
+      const wa = screen.getDisplayMatching(b).workArea;
+      const height = Math.round(Math.min(wa.height, Math.max(COMPACT_MIN_HEIGHT, b.height * factor)));
+      const width = Math.round((b.width / b.height) * height);
+      // keep bottom-centre anchored so she grows upwards
+      this.window.setBounds({
+        x: Math.round(b.x + (b.width - width) / 2), y: b.y + b.height - height, width, height,
+      });
+      this.rememberCompactBounds();
+    });
     ipcMain.on('renderer-ready-for-mode-change', (_event, newMode) => {
       if (newMode === 'pet') {
         setTimeout(() => {
@@ -201,27 +265,78 @@ export class WindowManager {
     this.window.webContents.send('pre-mode-changed', 'pet');
   }
 
+  /** Bounds for pet mode: whole virtual screen, or the compact floating window. */
+  private getPetBounds(): Bounds {
+    if (this.petSettings.petFullscreen) {
+      // Cover all displays so the avatar can be dragged between monitors.
+      const displays = screen.getAllDisplays();
+      const minX = Math.min(...displays.map((d) => d.bounds.x));
+      const minY = Math.min(...displays.map((d) => d.bounds.y));
+      const maxX = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width));
+      const maxY = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height));
+      return {
+        x: minX, y: minY, width: maxX - minX, height: maxY - minY,
+      };
+    }
+    const saved = this.petSettings.compactBounds;
+    // Only reuse saved bounds if they are still on a connected display
+    if (saved && screen.getAllDisplays().some((d) => {
+      const wa = d.workArea;
+      return saved.x + saved.width / 2 >= wa.x && saved.x + saved.width / 2 <= wa.x + wa.width
+        && saved.y + saved.height / 2 >= wa.y && saved.y + saved.height / 2 <= wa.y + wa.height;
+    })) return saved;
+    const wa = screen.getPrimaryDisplay().workArea;
+    const height = Math.min(COMPACT_DEFAULT.height, wa.height);
+    const width = Math.min(COMPACT_DEFAULT.width, wa.width);
+    return {
+      x: wa.x + wa.width - width - 24, y: wa.y + wa.height - height, width, height,
+    };
+  }
+
+  private rememberCompactBounds(): void {
+    if (!this.window || this.petSettings.petFullscreen) return;
+    this.petSettings.compactBounds = this.window.getBounds();
+    if (this.saveBoundsTimer) clearTimeout(this.saveBoundsTimer);
+    this.saveBoundsTimer = setTimeout(() => savePetSettings(this.petSettings), 500);
+  }
+
+  isPetFullscreen(): boolean {
+    return this.petSettings.petFullscreen;
+  }
+
+  setPetFullscreen(fullscreen: boolean): void {
+    this.petSettings.petFullscreen = fullscreen;
+    savePetSettings(this.petSettings);
+    this.window?.webContents.send('pet-fullscreen-changed', fullscreen);
+    if (this.window && this.currentMode === 'pet') {
+      this.window.setBounds(this.getPetBounds());
+      this.applyPetMouseState();
+    }
+  }
+
+  private isCompactPet(): boolean {
+    return this.currentMode === 'pet' && !this.petSettings.petFullscreen;
+  }
+
+  /**
+   * Pet-mode mouse handling. Compact window: the whole small window takes clicks
+   * (right-click menu, drag, resize grip work anywhere in it). Fullscreen: click-through
+   * except over the character (hover tracking). Force passthrough overrides both.
+   */
+  private applyPetMouseState(): void {
+    if (!this.window || this.currentMode !== 'pet') return;
+    let ignore: boolean;
+    if (this.forceIgnoreMouse) ignore = true;
+    else if (this.isCompactPet()) ignore = false;
+    else ignore = this.hoveringComponents.size === 0;
+    if (isMac) this.window.setIgnoreMouseEvents(ignore);
+    else this.window.setIgnoreMouseEvents(ignore, { forward: true });
+    if (!ignore) this.window.setFocusable(true);
+  }
+
   private continueSetWindowModePet(): void {
     if (!this.window) return;
-    // Calculate the bounding rectangle that covers all connected displays.
-    // This allows the transparent pet-mode window to span across monitors,
-    // so the avatar can be dragged freely between them.
-    const displays = screen.getAllDisplays();
-    const minX = Math.min(...displays.map((d) => d.bounds.x));
-    const minY = Math.min(...displays.map((d) => d.bounds.y));
-    const maxX = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width));
-    const maxY = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height));
-    const combinedWidth = maxX - minX;
-    const combinedHeight = maxY - minY;
-
-    // Resize and position the window to cover the entire virtual screen
-    // so the avatar is not clipped when dragged to a second monitor.
-    this.window.setBounds({
-      x: minX,
-      y: minY,
-      width: combinedWidth,
-      height: combinedHeight,
-    });
+    this.window.setBounds(this.getPetBounds());
 
     if (isMac) this.window.setWindowButtonVisibility(false);
     this.window.setResizable(false);
@@ -236,6 +351,7 @@ export class WindowManager {
     } else {
       this.window.setIgnoreMouseEvents(true, { forward: true });
     }
+    this.applyPetMouseState();
 
     this.window.webContents.send('mode-changed', 'pet');
   }
@@ -246,6 +362,8 @@ export class WindowManager {
 
   setIgnoreMouseEvents(ignore: boolean): void {
     if (!this.window) return;
+    // Compact pet window always takes clicks (unless passthrough is forced)
+    if (this.isCompactPet()) { this.applyPetMouseState(); return; }
 
     if (isMac) {
       this.window.setIgnoreMouseEvents(ignore);
@@ -293,17 +411,7 @@ export class WindowManager {
       this.hoveringComponents.delete(componentId);
     }
 
-    if (this.window) {
-      const shouldIgnore = this.hoveringComponents.size === 0;
-      if (isMac) {
-        this.window.setIgnoreMouseEvents(shouldIgnore);
-      } else {
-        this.window.setIgnoreMouseEvents(shouldIgnore, { forward: true });
-      }
-      if (!shouldIgnore) {
-        this.window.setFocusable(true);
-      }
-    }
+    this.applyPetMouseState();
   }
 
   // Toggle force ignore mouse events
@@ -311,19 +419,13 @@ export class WindowManager {
     this.forceIgnoreMouse = !this.forceIgnoreMouse;
 
     // Apply the new setting immediately
-    if (this.forceIgnoreMouse) {
+    if (this.currentMode === 'pet') {
+      this.applyPetMouseState();
+    } else if (this.forceIgnoreMouse) {
       if (isMac) {
         this.window?.setIgnoreMouseEvents(true);
       } else {
         this.window?.setIgnoreMouseEvents(true, { forward: true });
-      }
-    } else {
-      // Reapply normal behavior based on hovering components
-      const shouldIgnore = this.hoveringComponents.size === 0;
-      if (isMac) {
-        this.window?.setIgnoreMouseEvents(shouldIgnore);
-      } else {
-        this.window?.setIgnoreMouseEvents(shouldIgnore, { forward: true });
       }
     }
 

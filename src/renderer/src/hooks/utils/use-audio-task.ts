@@ -103,47 +103,34 @@ export const useAudioTask = () => {
       if (audioBase64) {
         const audioDataUrl = `data:audio/wav;base64,${audioBase64}`;
 
-        // Get Live2D manager and model
+        // Live2D model is optional: video avatars have none and only need the audio
         const live2dManager = (window as any).getLive2DManager?.();
-        if (!live2dManager) {
-          console.error('Live2D manager not found');
-          resolve();
-          return;
-        }
+        const model: Live2DModel | null = live2dManager?.getModel?.(0) ?? null;
+        const firstExpression = expressions?.[0] !== undefined ? expressions[0] : null;
 
-        const model = live2dManager.getModel(0);
-        if (!model) {
-          console.error('Live2D model not found at index 0');
-          resolve();
-          return;
-        }
-        console.log('Found model for audio playback');
+        if (model) {
+          console.log('Found model for audio playback');
+          if (!model._wavFileHandler) {
+            console.warn('Model does not have _wavFileHandler for lip sync');
+          }
 
-        if (!model._wavFileHandler) {
-          console.warn('Model does not have _wavFileHandler for lip sync');
-        } else {
-          console.log('Model has _wavFileHandler available');
-        }
+          // Set expression if available
+          const lappAdapter = (window as any).getLAppAdapter?.();
+          if (lappAdapter && firstExpression !== null) {
+            setExpression(
+              firstExpression,
+              lappAdapter,
+              `Set expression to: ${firstExpression}`,
+            );
+          }
 
-        // Set expression if available
-        const lappAdapter = (window as any).getLAppAdapter?.();
-        if (lappAdapter && expressions?.[0] !== undefined) {
-          setExpression(
-            expressions[0],
-            lappAdapter,
-            `Set expression to: ${expressions[0]}`,
-          );
-        }
-
-        // Start talk motion
-        if (LAppDefine && LAppDefine.PriorityNormal) {
-          console.log("Starting random 'Talk' motion");
-          model.startRandomMotion(
-            "Talk",
-            LAppDefine.PriorityNormal,
-          );
-        } else {
-          console.warn("LAppDefine.PriorityNormal not found - cannot start talk motion");
+          // Start talk motion
+          if (LAppDefine && LAppDefine.PriorityNormal) {
+            model.startRandomMotion(
+              "Talk",
+              LAppDefine.PriorityNormal,
+            );
+          }
         }
 
         // Setup audio element
@@ -173,13 +160,15 @@ export const useAudioTask = () => {
           }
 
           console.log('Starting audio playback with lip sync');
-          audio.play().catch((err) => {
+          audio.play().then(() => {
+            audioManager.setSpeaking(true, firstExpression);
+          }).catch((err) => {
             console.error("Audio play error:", err);
             cleanup();
           });
 
           // Setup lip sync
-          if (model._wavFileHandler) {
+          if (model && model._wavFileHandler) {
             if (!model._wavFileHandler._initialized) {
               console.log('Applying enhanced lip sync');
               model._wavFileHandler._initialized = true;

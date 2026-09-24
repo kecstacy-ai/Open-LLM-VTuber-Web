@@ -1,10 +1,9 @@
 import {
-  LuBell, LuSend, LuMic, LuMicOff, LuHand, LuX,
+  LuSend, LuMic, LuMicOff, LuHand,
 } from 'react-icons/lu';
 import {
   Box,
   Button,
-  Flex,
   Input,
   Stack,
   Text,
@@ -16,6 +15,7 @@ import { useInputSubtitle } from '@/hooks/electron/use-input-subtitle';
 import { useDraggable } from '@/hooks/electron/use-draggable';
 import { inputSubtitleStyles } from './electron-style';
 import { useMode } from '@/context/mode-context';
+import { useSubtitle } from '@/context/subtitle-context';
 
 export function InputSubtitle() {
   const {
@@ -35,6 +35,7 @@ export function InputSubtitle() {
 
   const { mode } = useMode();
   const isPet = mode === 'pet';
+  const { showSubtitle } = useSubtitle();
 
   const {
     elementRef,
@@ -95,72 +96,48 @@ export function InputSubtitle() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
+      {/* Hide/show the whole bar: right-click her → Toggle InputBox and Subtitle */}
       <Box {...inputSubtitleStyles.box}>
-        <IconButton
-          aria-label="Close subtitle"
-          onClick={handleClose}
-          {...inputSubtitleStyles.closeButton}
-        >
-          <LuX size={12} />
-        </IconButton>
-
-        {hasAIMessages && (
-          <VStack
-            minH={lastAIMessage ? '32px' : '0px'}
-            {...inputSubtitleStyles.messageStack}
-          >
-            {lastAIMessage && (
-              <Text {...inputSubtitleStyles.messageText}>
-                {lastAIMessage}
-              </Text>
-            )}
+        {showSubtitle && hasAIMessages && lastAIMessage && (
+          <VStack {...inputSubtitleStyles.messageStack}>
+            <Text {...inputSubtitleStyles.messageText}>
+              {lastAIMessage}
+            </Text>
           </VStack>
         )}
 
-        <Box {...inputSubtitleStyles.statusBox}>
-          <Flex align="center" justify="space-between" color="whiteAlpha.700">
-            <Flex align="center" gap="2">
-              <LuBell size={16} />
-              <Text {...inputSubtitleStyles.statusText}>
-                {aiState}
-              </Text>
-            </Flex>
-
-            <Flex gap="2">
-              <IconButton
-                aria-label="Toggle microphone"
-                onClick={handleMicToggle}
-                {...inputSubtitleStyles.iconButton}
-              >
-                {micOn ? <LuMic size={16} /> : <LuMicOff size={16} />}
-              </IconButton>
-              <IconButton
-                aria-label="Interrupt"
-                onClick={handleInterrupt}
-                {...inputSubtitleStyles.iconButton}
-              >
-                <LuHand size={16} />
-              </IconButton>
-            </Flex>
-          </Flex>
-        </Box>
-
         <Box {...inputSubtitleStyles.inputBox}>
-          <Stack direction="row" gap="2" p="2">
+          <Stack direction="row" gap="1" p="1.5" align="center">
+            <IconButton
+              aria-label="Toggle microphone"
+              title={`Mic ${micOn ? 'on' : 'off'} · ${aiState}`}
+              onClick={handleMicToggle}
+              {...inputSubtitleStyles.iconButton}
+            >
+              {micOn ? <LuMic size={14} /> : <LuMicOff size={14} />}
+            </IconButton>
+            <IconButton
+              aria-label="Interrupt"
+              title="Stop talking"
+              onClick={handleInterrupt}
+              {...inputSubtitleStyles.iconButton}
+            >
+              <LuHand size={14} />
+            </IconButton>
             <Input
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
               onCompositionStart={handleCompositionStart}
               onCompositionEnd={handleCompositionEnd}
-              placeholder="Type your message..."
+              placeholder="Type…"
               {...inputSubtitleStyles.input}
             />
             <Button
               onClick={handleSend}
               {...inputSubtitleStyles.sendButton}
             >
-              <LuSend size={16} />
+              <LuSend size={14} />
             </Button>
           </Stack>
         </Box>
