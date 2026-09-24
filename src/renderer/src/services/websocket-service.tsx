@@ -178,6 +178,11 @@ class WebSocketService {
         this.currentState = 'OPEN';
         this.stateSubject.next('OPEN');
         this.initializeConnection();
+        // Launched as a specific character (e.g. the "Bibi" shortcut): switch this session to it.
+        const character = new URLSearchParams(window.location.hash.slice(1)).get('character');
+        if (character) {
+          this.sendMessage({ type: 'switch-config', file: `${character}.yaml` });
+        }
       };
 
       ws.onmessage = (event) => {

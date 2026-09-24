@@ -193,10 +193,15 @@ export class WindowManager {
   private loadContent(): void {
     if (!this.window) return;
 
+    // `--character=bibi` on the command line starts the app as that character (characters/bibi.yaml).
+    const charArg = process.argv.find((a) => a.startsWith('--character='));
+    const character = charArg ? charArg.split('=')[1].replace(/[^\w-]/g, '') : '';
+    const hash = character ? `character=${character}` : '';
+
     if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-      this.window.loadURL(process.env.ELECTRON_RENDERER_URL);
+      this.window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${hash ? `#${hash}` : ''}`);
     } else {
-      this.window.loadFile(join(__dirname, '../renderer/index.html'));
+      this.window.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined);
     }
   }
 
