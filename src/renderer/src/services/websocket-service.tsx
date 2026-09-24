@@ -116,6 +116,25 @@ class WebSocketService {
 
   private currentState: 'CONNECTING' | 'OPEN' | 'CLOSING' | 'CLOSED' = 'CLOSED';
 
+  // Auto-reconnect: server restarts must not leave the avatar blank
+  private url: string | null = null;
+
+  private manualClose = false;
+
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private retryDelayMs = 1000;
+
+  private scheduleReconnect() {
+    if (this.manualClose || !this.url || this.retryTimer) return;
+    const delay = this.retryDelayMs;
+    this.retryDelayMs = Math.min(this.retryDelayMs * 2, 10000);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.url && !this.manualClose && this.currentState === 'CLOSED') this.connect(this.url);
+    }, delay);
+  }
+
   static getInstance() {
     if (!WebSocketService.instance) {
       WebSocketService.instance = new WebSocketService();
@@ -144,18 +163,24 @@ class WebSocketService {
       this.disconnect();
     }
 
+    this.url = url;
+    this.manualClose = false;
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+
     try {
-      this.ws = new WebSocket(url);
+      const ws = new WebSocket(url);
+      this.ws = ws;
       this.currentState = 'CONNECTING';
       this.stateSubject.next('CONNECTING');
 
-      this.ws.onopen = () => {
+      ws.onopen = () => {
+        this.retryDelayMs = 1000;
         this.currentState = 'OPEN';
         this.stateSubject.next('OPEN');
         this.initializeConnection();
       };
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
           this.messageSubject.next(message);
@@ -169,12 +194,15 @@ class WebSocketService {
         }
       };
 
-      this.ws.onclose = () => {
+      ws.onclose = () => {
+        if (this.ws !== ws) return; // an older socket closing after a reconnect
         this.currentState = 'CLOSED';
         this.stateSubject.next('CLOSED');
+        this.scheduleReconnect();
       };
 
-      this.ws.onerror = () => {
+      ws.onerror = () => {
+        if (this.ws !== ws) return;
         this.currentState = 'CLOSED';
         this.stateSubject.next('CLOSED');
       };
@@ -182,6 +210,7 @@ class WebSocketService {
       console.error('Failed to connect to WebSocket:', error);
       this.currentState = 'CLOSED';
       this.stateSubject.next('CLOSED');
+      this.scheduleReconnect();
     }
   }
 
@@ -207,8 +236,11 @@ class WebSocketService {
   }
 
   disconnect() {
-    this.ws?.close();
+    this.manualClose = true;
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    const old = this.ws;
     this.ws = null;
+    old?.close();
   }
 
   getCurrentState() {

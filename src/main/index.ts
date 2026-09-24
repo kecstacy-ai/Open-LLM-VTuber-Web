@@ -29,7 +29,16 @@ function setupIPC(): void {
   });
 
   ipcMain.on("window-minimize", () => {
-    windowManager.getWindow()?.minimize();
+    const window = windowManager.getWindow();
+    if (!window) return;
+    // Pet mode has no taskbar entry; show one while minimized so the user can click to restore
+    if (windowManager.getCurrentMode() === "pet") {
+      window.setSkipTaskbar(false);
+      window.once("restore", () => {
+        if (windowManager.getCurrentMode() === "pet") window.setSkipTaskbar(true);
+      });
+    }
+    window.minimize();
   });
 
   ipcMain.on("window-maximize", () => {
@@ -39,15 +48,22 @@ function setupIPC(): void {
     }
   });
 
+  // Close button = quit the app (Windows/Linux). macOS keeps the hide-to-dock convention.
   ipcMain.on("window-close", () => {
     const window = windowManager.getWindow();
-    if (window) {
-      if (process.platform === "darwin") {
-        window.hide();
-      } else {
-        window.close();
-      }
+    if (!window) return;
+    if (process.platform === "darwin") {
+      window.hide();
+    } else {
+      isQuitting = true;
+      app.quit();
     }
+  });
+
+  // Pet-mode toolbar
+  ipcMain.on("set-pet-fullscreen", (_event, fullscreen: boolean) => {
+    windowManager.setPetFullscreen(!!fullscreen);
+    menuManager.refreshTray();
   });
 
   ipcMain.on(

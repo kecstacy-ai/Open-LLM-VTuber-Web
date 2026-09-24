@@ -71,6 +71,11 @@ export class MenuManager {
     ];
   }
 
+  /** Rebuild the tray menu (e.g. after the pet Fullscreen setting changed from the renderer). */
+  refreshTray(): void {
+    this.updateTrayMenu();
+  }
+
   private updateTrayMenu(): void {
     if (!this.tray) return;
     // console.log('Updating tray menu, current mode:', this.currentMode)
@@ -99,6 +104,7 @@ export class MenuManager {
         click: () => {
           const windows = BrowserWindow.getAllWindows();
           windows.forEach((window) => {
+            if (window.isMinimized()) window.restore();
             window.show();
           });
         },

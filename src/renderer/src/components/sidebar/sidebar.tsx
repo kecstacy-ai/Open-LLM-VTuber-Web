@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { sidebarStyles } from './sidebar-styles';
 import SettingUI from './setting/setting-ui';
 import ChatHistoryPanel from './chat-history-panel';
+import BottomTab from './bottom-tab';
 import HistoryDrawer from './history-drawer';
 import { useSidebar } from '@/hooks/sidebar/use-sidebar';
 import { ModeType } from '@/context/mode-context';
@@ -119,8 +120,8 @@ const SidebarContent = memo(({
         isElectron={isElectron}
       />
     </Box>
-    {/* Camera / Screen / Browser tabs removed: need a vision model; kept in code for later */}
     <ChatHistoryPanel />
+    <BottomTab />
   </Box>
 ));
 
