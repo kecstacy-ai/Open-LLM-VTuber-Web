@@ -102,6 +102,9 @@ export const VideoAvatar = memo((): JSX.Element => {
   const videoRefs = [useRef<HTMLVideoElement>(null), useRef<HTMLVideoElement>(null)];
   const activeRef = useRef(0);
   const currentClipRef = useRef<string | undefined>(undefined);
+  // New character/model: forget the current clip so same-named clips (idle_1.webm) still reload.
+  // Declared before the clip-switch effect so it runs first.
+  useEffect(() => { currentClipRef.current = undefined; }, [baseUrl]);
   const listRef = useRef<string[]>([]);
   const tokenRef = useRef(0);
   const [opacity, setOpacity] = useState<[number, number]>([1, 0]);
