@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driver Card</title>
+  <meta name="description" content="Delivery driver digital card: book, tip, follow and shop.">
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --text: #f2f4f8;
+      --muted: #9aa3b2;
+      --accent: #3ddc97;
+      --line: #262b36;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    main {
+      width: 100%;
+      max-width: 420px;
+      padding-top: 24px;
+      text-align: center;
+    }
+    .avatar {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      margin: 0 auto 16px;
+      background: var(--accent);
+      color: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; }
+    .tagline { color: var(--muted); margin: 0 0 8px; }
+    .status {
+      display: inline-block;
+      font-size: 0.8rem;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 4px 12px;
+      margin-bottom: 24px;
+    }
+    .links { display: grid; gap: 12px; }
+    .link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .link:hover, .link:focus-visible { border-color: var(--accent); transform: translateY(-1px); }
+    .link small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+    .link .arrow { color: var(--accent); }
+    .link[hidden] { display: none; }
+    .save {
+      margin-top: 20px;
+      width: 100%;
+      padding: 14px;
+      border-radius: 14px;
+      border: none;
+      background: var(--accent);
+      color: var(--bg);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    footer { color: var(--muted); font-size: 0.8rem; margin: 28px 0 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- EDIT THESE: leave a value empty to hide its button. -->
+    <script>
+      const CONFIG = {
+        name: "Your Name",
+        initials: "YN",
+        tagline: "Delivery Driver · Melbourne",
+        available: true,
+        phone: "+61400000000",          // e.g. +61412345678
+        email: "you@example.com",
+        reserveUrl: "",                 // booking / reservation link
+        paypalUser: "",                 // PayPal.me username only, e.g. "yourname"
+        instagramUser: "",              // Instagram handle without @
+        printsUrl: "",                  // your 3D prints website
+        deliveryUrl: ""                 // optional: delivery/order page
+      };
+    </script>
+
+    <div class="avatar" id="avatar"></div>
+    <h1 id="name"></h1>
+    <p class="tagline" id="tagline"></p>
+    <span class="status" id="status"></span>
+
+    <nav class="links">
+      <a class="link" id="reserve" target="_blank" rel="noopener">Make a Reservation <span class="arrow">&rarr;</span></a>
+      <a class="link" id="order" target="_blank" rel="noopener">Order Delivery <span class="arrow">&rarr;</span></a>
+      <a class="link" id="tip" target="_blank" rel="noopener">Tip via PayPal <span class="arrow">&rarr;</span></a>
+      <a class="link" id="prints" target="_blank" rel="noopener">My 3D Prints <span class="arrow">&rarr;</span></a>
+      <a class="link" id="insta" target="_blank" rel="noopener">Instagram <span class="arrow">&rarr;</span></a>
+      <a class="link" id="call" href="#">Call <span class="arrow">&rarr;</span></a>
+    </nav>
+
+    <button class="save" id="save" type="button">Save contact</button>
+    <footer>Tap, don't type.</footer>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    $("avatar").textContent = CONFIG.initials;
+    $("name").textContent = CONFIG.name;
+    $("tagline").textContent = CONFIG.tagline;
+    $("status").textContent = CONFIG.available ? "● Available for delivery" : "○ Currently offline";
+
+    // Each link is only shown when its config value is filled in.
+    function setLink(id, href) {
+      const el = $(id);
+      if (!href) { el.hidden = true; return; }
+      el.href = href;
+    }
+    setLink("reserve", CONFIG.reserveUrl);
+    setLink("order", CONFIG.deliveryUrl);
+    setLink("tip", CONFIG.paypalUser ? `https://paypal.me/${CONFIG.paypalUser}` : "");
+    setLink("prints", CONFIG.printsUrl);
+    setLink("insta", CONFIG.instagramUser ? `https://instagram.com/${CONFIG.instagramUser}` : "");
+    setLink("call", CONFIG.phone ? `tel:${CONFIG.phone}` : "");
+    if (!CONFIG.phone) $("call").hidden = true;
+
+    // Downloadable contact card (vCard) so the tap saves the driver to the customer's phone.
+    $("save").addEventListener("click", () => {
+      const vcard = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        `FN:${CONFIG.name}`,
+        CONFIG.phone ? `TEL;TYPE=CELL:${CONFIG.phone}` : "",
+        CONFIG.email ? `EMAIL:${CONFIG.email}` : "",
+        CONFIG.instagramUser ? `URL:https://instagram.com/${CONFIG.instagramUser}` : "",
+        "END:VCARD"
+      ].filter(Boolean).join("\r\n");
+      const url = URL.createObjectURL(new Blob([vcard], { type: "text/vcard" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "driver.vcf";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+  </script>
+</body>
+</html>

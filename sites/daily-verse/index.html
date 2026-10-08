@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily Verse</title>
+  <meta name="description" content="A new verse every day.">
+  <style>
+    :root {
+      --bg: #f7f3ea;
+      --card: #ffffff;
+      --text: #2b2a27;
+      --muted: #7a7468;
+      --accent: #8a6d3b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1c1b19;
+        --card: #272622;
+        --text: #efeadf;
+        --muted: #a39c8c;
+        --accent: #d2b27a;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #1c1b19;
+      --card: #272622;
+      --text: #efeadf;
+      --muted: #a39c8c;
+      --accent: #d2b27a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    main {
+      width: 100%;
+      max-width: 560px;
+      background: var(--card);
+      border-radius: 18px;
+      padding: 40px 28px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+    .date {
+      color: var(--muted);
+      font-size: 0.9rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 0 0 24px;
+    }
+    .verse {
+      font-size: 1.4rem;
+      line-height: 1.6;
+      margin: 0 0 20px;
+    }
+    .reference {
+      color: var(--accent);
+      font-style: italic;
+      margin: 0 0 32px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    button {
+      font: inherit;
+      font-size: 0.95rem;
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent); color: var(--card); }
+    .toast {
+      min-height: 1.2em;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="date" id="date"></p>
+    <p class="verse" id="verse"></p>
+    <p class="reference" id="reference"></p>
+    <div class="actions">
+      <button id="copy" type="button">Copy</button>
+      <button id="share" type="button">Share</button>
+      <button id="theme" type="button">Theme</button>
+    </div>
+    <p class="toast" id="toast" aria-live="polite"></p>
+  </main>
+
+  <script>
+    // Add or edit verses here. Text is KJV (public domain).
+    const VERSES = [
+      { ref: "Psalm 118:24", text: "This is the day which the LORD hath made; we will rejoice and be glad in it." },
+      { ref: "Proverbs 3:5", text: "Trust in the LORD with all thine heart; and lean not unto thine own understanding." },
+      { ref: "Philippians 4:13", text: "I can do all things through Christ which strengtheneth me." },
+      { ref: "Joshua 1:9", text: "Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest." },
+      { ref: "Psalm 46:1", text: "God is our refuge and strength, a very present help in trouble." },
+      { ref: "Isaiah 40:31", text: "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint." },
+      { ref: "Romans 8:28", text: "And we know that all things work together for good to them that love God, to them who are the called according to his purpose." },
+      { ref: "Matthew 11:28", text: "Come unto me, all ye that labour and are heavy laden, and I will give you rest." },
+      { ref: "Psalm 23:1", text: "The LORD is my shepherd; I shall not want." },
+      { ref: "Proverbs 16:3", text: "Commit thy works unto the LORD, and thy thoughts shall be established." },
+      { ref: "Galatians 6:9", text: "And let us not be weary in well doing: for in due season we shall reap, if we faint not." },
+      { ref: "Psalm 37:5", text: "Commit thy way unto the LORD; trust also in him; and he shall bring it to pass." },
+      { ref: "2 Timothy 1:7", text: "For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind." },
+      { ref: "Lamentations 3:22-23", text: "It is of the LORD's mercies that we are not consumed, because his compassions fail not. They are new every morning: great is thy faithfulness." },
+      { ref: "Deuteronomy 31:6", text: "Be strong and of a good courage, fear not, nor be afraid of them: for the LORD thy God, he it is that doth go with thee; he will not fail thee, nor forsake thee." }
+    ];
+
+    const TIMEZONE = "Australia/Melbourne";
+
+    // Whole days since epoch in the chosen timezone, so the verse changes at local midnight.
+    function todayParts() {
+      const parts = new Intl.DateTimeFormat("en-AU", {
+        timeZone: TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit"
+      }).formatToParts(new Date());
+      const get = (type) => Number(parts.find((p) => p.type === type).value);
+      return { y: get("year"), m: get("month"), d: get("day") };
+    }
+
+    const { y, m, d } = todayParts();
+    const dayNumber = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+    const verse = VERSES[dayNumber % VERSES.length];
+
+    document.getElementById("date").textContent = new Date(Date.UTC(y, m - 1, d, 12))
+      .toLocaleDateString("en-AU", { timeZone: TIMEZONE, weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    document.getElementById("verse").textContent = "“" + verse.text + "”";
+    document.getElementById("reference").textContent = "— " + verse.ref;
+
+    const toast = document.getElementById("toast");
+    const fullText = verse.text + " — " + verse.ref;
+    const flash = (msg) => {
+      toast.textContent = msg;
+      setTimeout(() => { toast.textContent = ""; }, 2000);
+    };
+
+    document.getElementById("copy").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(fullText);
+        flash("Copied");
+      } catch {
+        flash("Copy not available here");
+      }
+    });
+
+    document.getElementById("share").addEventListener("click", async () => {
+      if (!navigator.share) return flash("Sharing not supported here");
+      try {
+        await navigator.share({ title: "Daily Verse", text: fullText, url: location.href });
+      } catch {
+        /* user cancelled */
+      }
+    });
+
+    // Theme toggle: remembers the choice per browser; falls back to system setting if storage is blocked.
+    const root = document.documentElement;
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved) root.setAttribute("data-theme", saved);
+    } catch { /* storage blocked */ }
+    document.getElementById("theme").addEventListener("click", () => {
+      const dark = root.getAttribute("data-theme") === "dark" ||
+        (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+      const next = dark ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("theme", next); } catch { /* storage blocked */ }
+    });
+  </script>
+</body>
+</html>
